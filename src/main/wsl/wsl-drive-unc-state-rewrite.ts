@@ -10,9 +10,9 @@ import type { LocalWindowsRuntimePreference } from '../../shared/project-executi
 import type { Project } from '../../shared/project-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
+  getRepoMainWorktreeId,
   splitWorktreeId,
-  splitWorktreeIdForFilesystem,
-  WORKTREE_ID_SEPARATOR
+  splitWorktreeIdForFilesystem
 } from '../../shared/worktree/id'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -122,8 +122,14 @@ export function rewriteWslDriveUncState(
       Object.assign(next, { [field]: rewriteWslDriveUncValue(state[field], rewriter) })
     }
   }
-  next.projects = withWindowsGit(next.projects, repoIds, scope.distro)
-  next.projectGroups = withConvertedGroupFolders(next, repoIds, folderWorkspaceIds, scope.distro)
+  next.projects = sameIfUnchanged(
+    next.projects,
+    withWindowsGit(next.projects, repoIds, scope.distro)
+  )
+  next.projectGroups = sameIfUnchanged(
+    next.projectGroups,
+    withConvertedGroupFolders(next, repoIds, folderWorkspaceIds, scope.distro)
+  )
   next.worktreeMeta = withPriorIds(next.worktreeMeta, worktreeIds, (id) => [id])
   if (next.worktreeMetaByIdentity) {
     next.worktreeMetaByIdentity = withPriorIds(
@@ -135,6 +141,11 @@ export function rewriteWslDriveUncState(
     )
   }
   return { state: next, worktreeIds }
+}
+
+/** Keeps the original array when no row changed, so an unchanged field is not written. */
+function sameIfUnchanged<T>(before: T[], after: T[]): T[] {
+  return after.every((row, index) => row === before[index]) ? before : after
 }
 
 function isStateField(field: string): field is keyof PersistedState {
@@ -163,7 +174,7 @@ function collectRewrittenWorktreeIds(
     }
   }
   for (const repo of state.repos) {
-    recorder.identity(`${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`)
+    recorder.identity(getRepoMainWorktreeId(repo))
   }
   return ids
 }
