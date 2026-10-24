@@ -79,24 +79,32 @@ test.describe('Windows runtimes', () => {
       // WSL must retarget both agent detection and the PTY.
       await useWslRuntimeForActiveProject(orcaPage, distro!)
       await configureGoldenStubAgent(orcaPage, { agent: 'codex' })
-      await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
-      for (let i = 0; i < 40; i++) {
-        const items = await orcaPage.getByRole('menuitem').allInnerTexts()
-        const snap = await orcaPage.evaluate(() => {
-          const s = window.__store!.getState() as unknown as Record<string, unknown>
-          return JSON.stringify({
-            detectedAgentIds: s.detectedAgentIds,
-            isDetectingAgents: s.isDetectingAgents,
-            byContext: s.localDetectedAgentIdsByContext,
-            detectingByContext: s.isDetectingLocalAgentsByContext,
-            refreshingByContext: s.isRefreshingLocalAgentsByContext
+      const t0 = Date.now()
+      try {
+        await launchGoldenStubAgentFromNewTab(orcaPage)
+        console.log(`[diag3] launched ok after ${Date.now() - t0}ms`)
+      } catch (error) {
+        for (let i = 0; i < 40; i++) {
+          const items = await orcaPage.getByRole('menuitem').evaluateAll((els) =>
+            els.map((e) => `${e.getAttribute('aria-label') ?? ''}|${(e as HTMLElement).innerText}`)
+          )
+          const snap = await orcaPage.evaluate(() => {
+            const s = window.__store!.getState() as unknown as Record<string, unknown>
+            return JSON.stringify({
+              detectedAgentIds: s.detectedAgentIds,
+              isDetectingAgents: s.isDetectingAgents,
+              isRefreshingAgents: s.isRefreshingAgents,
+              byContext: s.localDetectedAgentIdsByContext,
+              detectingByContext: s.isDetectingLocalAgentsByContext,
+              refreshingByContext: s.isRefreshingLocalAgentsByContext,
+              nativeChat: (s.settings as Record<string, unknown> | null)?.nativeChatEnabled
+            })
           })
-        })
-        console.log(`[diag-menu ${i}] ${JSON.stringify(items)} ${snap}`)
-        await orcaPage.waitForTimeout(1000)
+          console.log(`[diag3 ${Date.now() - t0}ms] ${JSON.stringify(items)} ${snap}`)
+          await orcaPage.waitForTimeout(1000)
+        }
+        throw error
       }
-      await orcaPage.keyboard.press('Escape')
-      await launchGoldenStubAgentFromNewTab(orcaPage)
 
       // The distro-only marker proves the agent ran in WSL.
       expect(await getTerminalContent(orcaPage)).toContain(GOLDEN_STUB_READY_MARKER)
