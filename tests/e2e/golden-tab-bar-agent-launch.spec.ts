@@ -79,6 +79,22 @@ test.describe('Windows runtimes', () => {
       // WSL must retarget both agent detection and the PTY.
       await useWslRuntimeForActiveProject(orcaPage, distro!)
       await configureGoldenStubAgent(orcaPage, { agent: 'codex' })
+      for (let i = 0; i < 30; i++) {
+        const snap = await orcaPage.evaluate(() => {
+          const s = window.__store!.getState() as unknown as Record<string, unknown>
+          return JSON.stringify({
+            t: Date.now(),
+            detectedAgentIds: s.detectedAgentIds,
+            isDetectingAgents: s.isDetectingAgents,
+            isRefreshingAgents: s.isRefreshingAgents,
+            byContext: s.localDetectedAgentIdsByContext,
+            detectingByContext: s.isDetectingLocalAgentsByContext,
+            refreshingByContext: s.isRefreshingLocalAgentsByContext
+          })
+        })
+        console.log(`[diag-detect ${i}] ${snap}`)
+        await orcaPage.waitForTimeout(1000)
+      }
       await launchGoldenStubAgentFromNewTab(orcaPage)
 
       // The distro-only marker proves the agent ran in WSL.
